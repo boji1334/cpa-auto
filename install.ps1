@@ -11,6 +11,7 @@ param(
     [string]$Image = "eceasy/cli-proxy-api:latest",
     [string]$Timezone = "Asia/Shanghai",
     [switch]$OAuthPorts,
+    [switch]$NoCaddy,
     [switch]$NoStart,
     [switch]$Help
 )
@@ -36,6 +37,7 @@ Options:
   -Image IMAGE             Docker image. Default: eceasy/cli-proxy-api:latest.
   -Timezone TZ             Timezone. Default: Asia/Shanghai.
   -OAuthPorts              Expose OAuth helper callback ports on 0.0.0.0.
+  -NoCaddy                 Do not create/start Caddy even when -Domain is set.
   -NoStart                 Write files but do not start containers.
   -Help                    Show this help.
 
@@ -61,7 +63,7 @@ if ([string]::IsNullOrWhiteSpace($Dir)) {
     }
 }
 
-$UseCaddy = -not [string]::IsNullOrWhiteSpace($Domain)
+$UseCaddy = -not [string]::IsNullOrWhiteSpace($Domain) -and -not $NoCaddy
 if ($Mode -eq "local" -or $UseCaddy) {
     $BindHost = "127.0.0.1"
 }

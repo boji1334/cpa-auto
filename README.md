@@ -122,6 +122,14 @@ sudo bash install.sh --server --domain cpa.example.com --oauth-ports --install-d
 
 By default, OAuth helper callback ports `8085`, `1455`, `54545`, `51121`, and `11451` are bound to `127.0.0.1`. Use `--oauth-ports` only when the web management panel needs provider login callbacks to reach the server directly.
 
+Use an existing reverse proxy instead of Caddy:
+
+```bash
+sudo bash install.sh --server --domain cpa.example.com --no-caddy --install-docker
+```
+
+With `--no-caddy`, point your nginx/Caddy/Cloudflare Tunnel to `http://127.0.0.1:8317`.
+
 ## Data Location
 
 The install directory contains:
@@ -133,8 +141,8 @@ config.yaml          CLIProxyAPI configuration
 docker-compose.yml   Docker Compose configuration
 auths/               OAuth/auth records
 logs/                CLIProxyAPI logs
-caddy_data/          Caddy certificates, when using a domain
-caddy_config/        Caddy config cache, when using a domain
+caddy_data/          Caddy certificates, when using a domain without --no-caddy
+caddy_config/        Caddy config cache, when using a domain without --no-caddy
 ```
 
 To migrate to another server, stop the service and copy the whole install directory.

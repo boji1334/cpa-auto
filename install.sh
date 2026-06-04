@@ -13,6 +13,7 @@ MANAGEMENT_PASSWORD="${MANAGEMENT_PASSWORD:-}"
 INSTALL_DOCKER="0"
 START_SERVICES="1"
 ENABLE_OAUTH_PORTS="0"
+NO_CADDY="0"
 SETUP_CF_DNS="0"
 CF_API_TOKEN="${CF_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
 CF_ZONE_ID="${CF_ZONE_ID:-}"
@@ -42,6 +43,7 @@ Options:
   --image IMAGE           Docker image. Default: eceasy/cli-proxy-api:latest.
   --timezone TZ           Timezone. Default: Asia/Shanghai.
   --oauth-ports           Expose OAuth helper callback ports 8085, 1455, 54545, 51121, 11451.
+  --no-caddy              Do not create/start Caddy even when --domain is set.
   --cloudflare-dns        Create/update Cloudflare A record for --domain.
   --cf-token TOKEN        Cloudflare API token. Prefer CF_API_TOKEN env var.
   --cf-zone-id ZONE_ID    Cloudflare zone ID. Auto-detected from --domain if omitted.
@@ -117,6 +119,10 @@ while [ "$#" -gt 0 ]; do
       ENABLE_OAUTH_PORTS="1"
       shift
       ;;
+    --no-caddy)
+      NO_CADDY="1"
+      shift
+      ;;
     --cloudflare-dns)
       SETUP_CF_DNS="1"
       shift
@@ -175,6 +181,9 @@ fi
 USE_CADDY="0"
 if [ -n "$DOMAIN" ]; then
   USE_CADDY="1"
+fi
+if [ "$NO_CADDY" = "1" ]; then
+  USE_CADDY="0"
 fi
 
 if [ "$MODE" = "local" ] || [ "$USE_CADDY" = "1" ]; then
