@@ -134,20 +134,70 @@ CPA 的核心配置里是 `api-keys` 列表，不是完整的用户注册、邮�
 
 ### 3.3 如何新增或调整用户 key
 
-方式一：通过内置管理面板。
+先分清三个很像但完全不同的东西：
+
+| 入口 | 你在里面管理什么 | 是否给普通用户 |
+| --- | --- | --- |
+| `配置面板` -> `API 密钥列表 (api-keys)` | CPA 对外接口的客户端 API Key | 是，给用户这个 |
+| `认证文件` / `OAuth 登录` | 后端账号凭据，例如 Codex、Claude、Gemini 的 auth 文件 | 否，只给管理员 |
+| `AI 提供商` 里的 `API 密钥` | 第三方上游 OpenAI-compatible provider 的 upstream key | 否，不是用户 key |
+
+你要“给用户分配一个 key”，应该去 `配置面板`，不是去 `AI 提供商`。如果你在 `AI 提供商` 里填 `boji`，再点“从 `/v1/models` 获取”，出现 `401 Invalid API key` 是正常的：那个地方是在测试上游 provider 的 API Key，不是在创建 CPA 用户 key。
+
+菜单定位：
+
+![CPAMC 菜单定位](assets/cpamc-menu-map.svg)
+
+#### 方式一：在 CPAMC 界面新增用户 API Key
 
 1. 打开 `https://cat.cpa.boji1334.com/management.html`。
-2. 用管理密钥登录。
-3. 找到配置里的 `api-keys`。
-4. 增加一个新的 key。
-5. 保存配置并重启/应用。
+2. 用管理密钥登录。注意这里用的是管理密钥，不是普通用户 API Key。
+3. 左侧点 `配置面板`。你的界面里它在左侧菜单靠上位置，也可能显示副标题 `网关基础配置`。
+4. 进入后选择 `可视化` 编辑模式。如果页面已经是表单卡片形式，就不用切。
+5. 找到第 `02` 块，标题通常是 `认证`、`认证/API Key` 或类似文字。
+6. 在这一块里找到 `API 密钥列表 (api-keys)`。
+7. 点 `添加 API 密钥`。
+8. 弹窗里可以手动输入 key，也可以点 `生成`。
+9. 点弹窗里的 `添加`。
+10. 回到配置面板底部，点 `保存`。
+11. 如果页面提示需要重载、应用或重启配置，按提示执行。没有提示时，也建议在服务器上执行一次 `./cpactl restart`。
 
-方式二：直接改服务器配置。
+示意图：
+
+![CPAMC API Key 创建流程](assets/cpamc-api-key-flow.svg)
+
+建议 key 的命名方式：
+
+```text
+cpa_用户或团队_用途_随机串
+cpa_boji_test_随机串
+cpa_team_a_prod_随机串
+```
+
+不要只用 `boji`、`test`、`123456` 这种短 key。它太容易被猜到，也不方便以后区分是谁在用。
+
+新增后立刻验证：
+
+```bash
+curl https://cat.cpa.boji1334.com/v1/models \
+  -H "Authorization: Bearer 新增的用户APIKey"
+```
+
+如果返回模型列表，说明这个用户 key 可以用了。如果返回 `401`，按顺序检查：
+
+- 你复制的是 `API 密钥列表 (api-keys)` 里的客户端 key。
+- 不是管理密钥，也不是 Manager Plus admin key。
+- 保存配置后已经应用或重启。
+- 请求地址是 `https://cat.cpa.boji1334.com/v1/models`。
+- 请求头是 `Authorization: Bearer ...`。
+
+#### 方式二：直接改服务器配置
+
+如果界面暂时打不开，或者你更想直接改文件，可以 SSH 到服务器：
 
 ```bash
 cd /opt/cpa
 nano config.yaml
-./cpactl restart
 ```
 
 配置形态类似：
@@ -159,7 +209,19 @@ api-keys:
   - "team-prod-key"
 ```
 
-如果安装了 Manager Plus，可以在 Manager Plus 里给 API Key 设置别名或备注，方便之后看谁用了多少、哪个 key 出问题。
+保存后重启：
+
+```bash
+./cpactl restart
+```
+
+#### 方式三：用 Manager Plus 做备注和统计
+
+如果安装了 Manager Plus，可以在 Manager Plus 里给 API Key 设置别名或备注，方便之后看谁用了多少、哪个 key 出问题。但你要记住：
+
+- 真正决定“这个 key 能不能调用 CPA”的，仍然是 CPA 配置里的 `api-keys`。
+- Manager Plus 的别名/备注主要用于展示、统计和排查。
+- 不要只在 Manager Plus 里写一个名字，却没有把 key 加进 CPA 的 `api-keys`。
 
 ## 4. 给用户怎么接入
 
@@ -301,12 +363,31 @@ https://cat.cpa.boji1334.com/management.html
 用途：
 
 - 查看和修改 CPA 配置。
-- 管理 `api-keys`。
+- 在 `配置面板` 管理 `api-keys`，也就是给普通用户的 CPA 客户端 API Key。
 - 管理 provider 相关配置。
 - 上传、下载、删除 auth 文件。
 - 查看基础状态。
 
 这个后台使用 CPA 的管理密钥，不是客户端 API Key。
+
+常用菜单对照：
+
+| 菜单 | 什么时候用 | 常见误区 |
+| --- | --- | --- |
+| `配置面板` | 新增用户 API Key、改 `config.yaml`、开启统计、改路由等 | 不保存/不重启时配置不会生效 |
+| `AI 提供商` | 接 OpenAI-compatible 上游、设置 provider、模型别名等 | 这里的 `API 密钥` 是上游 key，不是用户 key |
+| `认证文件` | 上传、下载、删除 JSON auth 文件 | auth 文件是后端账号，不要发给用户 |
+| `OAuth 登录` | 通过网页登录新增 Codex/Claude/Gemini 等账号 | 登录的是后端账号，不是创建用户 |
+| `配额管理` | 看 OAuth 账号额度和剩余情况 | 不是创建普通用户 API Key 的主入口 |
+| `日志查看` | 排查请求失败、模型不可用、账号报错 | 日志可能含敏感请求信息 |
+
+如果你看到 `从 /v1/models 选择模型` 弹窗报：
+
+```text
+获取模型失败: 401 Invalid API key
+```
+
+通常说明你正在 `AI 提供商` 页面测试某个上游 provider 的 API Key。这里要填的是上游服务的真实 key，而不是你给 CPA 用户分配的 key。普通用户 key 的创建入口仍然是 `配置面板` -> `API 密钥列表 (api-keys)`。
 
 ### 5.2 Manager Plus
 
@@ -352,18 +433,135 @@ CPA 配置里对应：
 auth-dir: "~/.cli-proxy-api"
 ```
 
-### 6.1 推荐导入方式
+### 6.1 你已经导入文件时怎么看状态
 
-优先用管理面板或 Manager Plus 的 Auth Files 页面导入：
+如果你在 `配额管理` 页面看到类似：
+
+```text
+Codex 额度  2
+5 小时限额  99%
+周限额      100%
+```
+
+这说明：
+
+- CPA 已经识别到 `2` 个 Codex 后端认证文件。
+- 这些认证文件能被 Manager Plus 读取并查询额度。
+- 绿色额度条表示当前账号额度状态正常。
+- 这只是“后端账号池已经有账号”，不等于“普通用户 API Key 已经创建”。
+
+如果页面显示：
+
+```text
+暂无 Claude OAuth 认证
+暂无 Antigravity 认证
+```
+
+意思是这些 provider 还没有对应 auth 文件。你不打算用 Claude 或 Antigravity 时可以不用管。
+
+CPA 的调用链可以这样理解：
+
+```text
+普通用户客户端
+  -> 使用你分配的 CPA API Key 调用 https://cat.cpa.boji1334.com/v1
+  -> CPA 检查 config.yaml 里的 api-keys
+  -> CPA 从 auths/ 里选择一个可用的后端认证文件
+  -> 请求真正发到 Codex / Claude / Gemini 等后端账号
+```
+
+所以你现在已经完成的是“后端认证文件导入”。还缺的是：在 `配置面板` 里给用户创建 `api-keys`，然后把 `Base URL + 用户 API Key` 发给用户。
+
+### 6.2 推荐导入方式
+
+优先用 `认证文件` 或 `OAuth 登录` 页面导入，不要直接覆盖服务器目录。
+
+#### 已经有 JSON auth 文件时
+
+1. 打开 `https://cat.cpa.boji1334.com/management.html`。
+2. 左侧点 `认证文件`。
+3. 右上角点 `上传文件`。
+4. 选择从 sub2api 或旧服务器导出的 JSON auth 文件。
+5. 上传后看页面卡片上是否出现 provider 标签，例如 `Codex`、`Claude`、`Gemini`。
+6. 确认卡片右下角 `启用` 开关是打开的。
+7. 点卡片里的 `模型`，看这个账号能不能列出模型。部分 CPA 版本不支持这个按钮时，可以跳过。
+8. 用一个客户端 API Key 调用 `/v1/models` 或发一条小请求测试。
+9. 单个文件确认可用后，再批量上传其他账号。
+
+认证文件卡片上的按钮大致这样理解：
+
+| 按钮/位置 | 用途 |
+| --- | --- |
+| `模型` | 查看这个 auth 文件可用的模型，依赖 CPA 后端版本 |
+| 下载图标 | 下载备份这个 auth 文件 |
+| 齿轮/设置 | 编辑 prefix、proxy、priority、note、excluded models 等信息 |
+| 删除图标 | 删除这个 auth 文件 |
+| `启用` 开关 | 临时启用或禁用这个后端账号 |
+
+#### 还没有 auth 文件时
+
+如果你不是从 sub2api 迁移，而是要新增一个后端账号：
+
+1. 左侧点 `OAuth 登录`。
+2. 选择要登录的服务，例如 `Codex`、`Claude`、`Gemini CLI`、`Kimi`、`xAI/Grok`。
+3. 按页面给出的授权链接或设备码去浏览器登录。
+4. 如果授权后跳到 `localhost` 回调地址，就把完整回调 URL 复制回页面里的 `回调 URL` 输入框。
+5. 提交后等待页面显示成功。
+6. 回到 `认证文件` 页面，确认多了一个新的 auth 文件。
+7. 点 `模型` 或用 `/v1/models` 测试它是否可用。
+
+#### 从 sub2api 迁移时
 
 1. 先在当前 sub2api 服务器上找到账号/auth 文件来源。
 2. 下载或复制一份到本地临时目录。
 3. 不要直接覆盖 CPA 的整个 `auths/` 目录。
-4. 先在 CPA 管理面板里上传一两个 auth 文件测试。
+4. 先上传一两个 auth 文件测试。
 5. 用 `/v1/models` 或一次小请求确认该账号可用。
 6. 确认格式兼容后，再批量导入。
 
-### 6.2 直接复制文件的方式
+如果上传后页面显示文件，但请求不可用，优先看：
+
+- 文件是不是 CPA 支持的 JSON auth 格式。
+- 卡片是否已启用。
+- provider 类型是否识别正确。
+- 账号 token 是否过期。
+- `日志查看` 里有没有 provider 报错。
+- `配额管理` 里该账号是否已经没额度。
+
+### 6.3 本地已经导入文件，怎么迁到服务器
+
+如果你是在本地 CPA 里已经导入了 auth 文件，现在想迁到服务器，有两种稳妥方式。
+
+方式一：从界面下载再上传。
+
+1. 本地打开 `认证文件` 页面。
+2. 在每个 auth 文件卡片上点下载图标。
+3. 保存到一个临时目录。
+4. 打开服务器的 `https://cat.cpa.boji1334.com/management.html`。
+5. 进入 `认证文件`。
+6. 点 `上传文件`，把刚才下载的 JSON 文件上传。
+7. 上传后去 `配额管理` 刷新，看是否出现对应 provider 的额度卡片。
+
+方式二：直接复制 `auths/` 目录。
+
+本仓库脚本部署时，常见位置是：
+
+```text
+Linux 服务器：/opt/cpa/auths/
+Windows 本地：%USERPROFILE%\cpa-local\auths\
+```
+
+迁移时建议先备份，再复制：
+
+```bash
+cd /opt/cpa
+./cpactl backup
+cp /path/to/local/auths/*.json ./auths/
+./cpactl restart
+```
+
+auth JSON 文件等同于后端账号登录凭据，不要上传到 GitHub，不要发给普通用户，不要放进公开截图。
+
+### 6.4 直接复制文件的方式
 
 如果确认文件格式就是 CPA 能识别的 auth 文件，也可以直接放进服务器目录：
 
@@ -380,7 +578,7 @@ cp /path/to/auth-file.json ./auths/
 ./cpactl logs
 ```
 
-### 6.3 从 sub2api 迁移前要检查什么
+### 6.5 从 sub2api 迁移前要检查什么
 
 迁移前先弄清楚 sub2api 里存的到底是什么：
 
@@ -392,7 +590,7 @@ cp /path/to/auth-file.json ./auths/
 
 如果 sub2api 存的是数据库，而不是 CPA 可识别的 auth 文件，就不能简单复制。需要先导出、转换或重新在 CPA 里登录账号。
 
-### 6.4 备份优先
+### 6.6 备份优先
 
 迁移账号前先备份 CPA：
 
