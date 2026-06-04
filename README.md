@@ -22,13 +22,15 @@ curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh |
 
 ### Ubuntu Server With Cloudflare DNS
 
-This creates or updates the Cloudflare A record for the domain before starting Caddy:
+This creates or updates the Cloudflare A record for the domain before starting Caddy. The script defaults the record to DNS-only, which lets Caddy issue the HTTPS certificate directly:
 
 ```bash
 CF_API_TOKEN=cf_xxx curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo -E bash -s -- --server --domain cat.cpa.boji1334.com --cloudflare-dns --install-docker
 ```
 
 The Cloudflare token is read only from the command environment. It is not written to `.env`, `.credentials`, or `config.yaml`.
+
+If you want Cloudflare orange-cloud proxy, add `--cf-proxied true` and set Cloudflare SSL/TLS mode to Full or Full (strict).
 
 ### Local Linux / macOS
 

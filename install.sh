@@ -16,7 +16,7 @@ ENABLE_OAUTH_PORTS="0"
 SETUP_CF_DNS="0"
 CF_API_TOKEN="${CF_API_TOKEN:-${CLOUDFLARE_API_TOKEN:-}}"
 CF_ZONE_ID="${CF_ZONE_ID:-}"
-CF_PROXIED="${CF_PROXIED:-true}"
+CF_PROXIED="${CF_PROXIED:-false}"
 CF_TTL="${CF_TTL:-1}"
 HTTP_PORT="${HTTP_PORT:-80}"
 HTTPS_PORT="${HTTPS_PORT:-443}"
@@ -45,7 +45,7 @@ Options:
   --cloudflare-dns        Create/update Cloudflare A record for --domain.
   --cf-token TOKEN        Cloudflare API token. Prefer CF_API_TOKEN env var.
   --cf-zone-id ZONE_ID    Cloudflare zone ID. Auto-detected from --domain if omitted.
-  --cf-proxied true|false Cloudflare proxy status. Default: true.
+  --cf-proxied true|false Cloudflare proxy status. Default: false.
   --install-docker        Install Docker automatically on Linux if missing.
   --no-start              Write files but do not start containers.
   -h, --help              Show this help.
