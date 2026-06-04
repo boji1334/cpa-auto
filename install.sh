@@ -11,6 +11,12 @@ TIMEZONE="${TZ:-Asia/Shanghai}"
 API_KEY="${API_KEY:-}"
 MANAGEMENT_PASSWORD="${MANAGEMENT_PASSWORD:-}"
 ASK_SECRETS="0"
+WITH_MANAGER_PLUS="0"
+MANAGER_PLUS_IMAGE="${MANAGER_PLUS_IMAGE:-seakee/cpa-manager-plus:latest}"
+MANAGER_PLUS_PORT="${MANAGER_PLUS_PORT:-18317}"
+MANAGER_PLUS_DOMAIN="${MANAGER_PLUS_DOMAIN:-}"
+MANAGER_PLUS_ADMIN_KEY="${MANAGER_PLUS_ADMIN_KEY:-}"
+MANAGER_PLUS_COLLECTOR_MODE="${MANAGER_PLUS_COLLECTOR_MODE:-auto}"
 INSTALL_DOCKER="0"
 START_SERVICES="1"
 ENABLE_OAUTH_PORTS="0"
@@ -43,6 +49,14 @@ Options:
   --management-password P Management key for /management.html and /v0/management. Default: auto-generated.
   --ask-secrets           Prompt for API key and management key interactively.
   --image IMAGE           Docker image. Default: eceasy/cli-proxy-api:latest.
+  --with-manager-plus     Install CPA Manager Plus alongside CPA.
+  --manager-plus-domain D HTTPS domain for Manager Plus when using Caddy or an external reverse proxy.
+  --manager-plus-port P   Host port for Manager Plus. Default: 18317.
+  --manager-plus-admin-key KEY
+                           Manager Plus login admin key. Default: auto-generated.
+  --manager-plus-image I  Manager Plus image. Default: seakee/cpa-manager-plus:latest.
+  --manager-plus-collector-mode auto|http|resp|subscribe
+                           Usage collector mode. Default: auto.
   --timezone TZ           Timezone. Default: Asia/Shanghai.
   --oauth-ports           Expose OAuth helper callback ports 8085, 1455, 54545, 51121, 11451.
   --no-caddy              Do not create/start Caddy even when --domain is set.
@@ -57,6 +71,7 @@ Options:
 Examples:
   curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | bash -s -- --local
   curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --ask-secrets --install-docker
+  curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --with-manager-plus --manager-plus-domain manager.cpa.boji1334.com --install-docker
   curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --install-docker
   export CF_API_TOKEN=cf_xxx
   curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo -E bash -s -- --server --domain cat.cpa.boji1334.com --cloudflare-dns --install-docker
@@ -119,6 +134,35 @@ while [ "$#" -gt 0 ]; do
       CPA_IMAGE="${2:-}"
       shift 2
       ;;
+    --with-manager-plus)
+      WITH_MANAGER_PLUS="1"
+      shift
+      ;;
+    --manager-plus-domain)
+      MANAGER_PLUS_DOMAIN="${2:-}"
+      WITH_MANAGER_PLUS="1"
+      shift 2
+      ;;
+    --manager-plus-port)
+      MANAGER_PLUS_PORT="${2:-}"
+      WITH_MANAGER_PLUS="1"
+      shift 2
+      ;;
+    --manager-plus-admin-key)
+      MANAGER_PLUS_ADMIN_KEY="${2:-}"
+      WITH_MANAGER_PLUS="1"
+      shift 2
+      ;;
+    --manager-plus-image)
+      MANAGER_PLUS_IMAGE="${2:-}"
+      WITH_MANAGER_PLUS="1"
+      shift 2
+      ;;
+    --manager-plus-collector-mode)
+      MANAGER_PLUS_COLLECTOR_MODE="${2:-}"
+      WITH_MANAGER_PLUS="1"
+      shift 2
+      ;;
     --timezone)
       TIMEZONE="${2:-}"
       shift 2
@@ -169,9 +213,16 @@ done
 case "$SERVER_PORT" in
   ''|*[!0-9]*) die "--port must be a number" ;;
 esac
+case "$MANAGER_PLUS_PORT" in
+  ''|*[!0-9]*) die "--manager-plus-port must be a number" ;;
+esac
 case "$CF_PROXIED" in
   true|false) ;;
   *) die "--cf-proxied must be true or false" ;;
+esac
+case "$MANAGER_PLUS_COLLECTOR_MODE" in
+  auto|http|resp|subscribe) ;;
+  *) die "--manager-plus-collector-mode must be auto, http, resp, or subscribe" ;;
 esac
 
 if [ -z "$APP_DIR" ]; then
@@ -194,10 +245,20 @@ if [ "$NO_CADDY" = "1" ]; then
   USE_CADDY="0"
 fi
 
-if [ "$MODE" = "local" ] || [ "$USE_CADDY" = "1" ]; then
+if [ "$MODE" = "local" ] || [ "$USE_CADDY" = "1" ] || { [ "$NO_CADDY" = "1" ] && [ -n "$DOMAIN" ]; }; then
   BIND_HOST="127.0.0.1"
 else
   BIND_HOST="0.0.0.0"
+fi
+
+if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+  if [ "$MODE" = "local" ] || [ "$USE_CADDY" = "1" ] || [ -n "$MANAGER_PLUS_DOMAIN" ]; then
+    MANAGER_PLUS_BIND_HOST="127.0.0.1"
+  else
+    MANAGER_PLUS_BIND_HOST="0.0.0.0"
+  fi
+else
+  MANAGER_PLUS_BIND_HOST="127.0.0.1"
 fi
 
 if [ "$SETUP_CF_DNS" = "1" ] && [ -z "$DOMAIN" ]; then
@@ -460,6 +521,45 @@ services:
       retries: 3
       start_period: 20s
 YAML
+
+  if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+    cat >> docker-compose.yml <<'YAML'
+
+  cpa-manager-plus:
+    image: "${MANAGER_PLUS_IMAGE:-seakee/cpa-manager-plus:latest}"
+    container_name: cpa-manager-plus
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      - cli-proxy-api
+    environment:
+      NODE_ENV: "production"
+      TZ: "${TZ:-Asia/Shanghai}"
+      CPA_MANAGER_ADMIN_KEY: "${MANAGER_PLUS_ADMIN_KEY:?MANAGER_PLUS_ADMIN_KEY is required}"
+      CPA_UPSTREAM_URL: "http://cli-proxy-api:8317"
+      CPA_MANAGEMENT_KEY: "${MANAGEMENT_PASSWORD:?MANAGEMENT_PASSWORD is required}"
+      CPA_MANAGER_DATA_KEY_PATH: "/data/data.key"
+      USAGE_COLLECTOR_MODE: "${MANAGER_PLUS_COLLECTOR_MODE:-auto}"
+      USAGE_DATA_DIR: "/data"
+      USAGE_DB_PATH: "/data/usage.sqlite"
+      USAGE_RESP_QUEUE: "usage"
+      USAGE_RESP_POP_SIDE: "right"
+      USAGE_BATCH_SIZE: "100"
+      USAGE_POLL_INTERVAL_MS: "500"
+      USAGE_QUERY_LIMIT: "50000"
+      USAGE_CORS_ORIGINS: "*"
+    ports:
+      - "${MANAGER_PLUS_BIND_HOST:-127.0.0.1}:${MANAGER_PLUS_PORT:-18317}:18317"
+    volumes:
+      - ./manager-plus-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:18317/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+YAML
+  fi
 }
 
 write_caddy_files() {
@@ -492,9 +592,26 @@ ${DOMAIN} {
     reverse_proxy cli-proxy-api:8317
 }
 EOF
+
+  if [ "$WITH_MANAGER_PLUS" = "1" ] && [ -n "$MANAGER_PLUS_DOMAIN" ]; then
+    cat >> Caddyfile <<EOF
+
+${MANAGER_PLUS_DOMAIN} {
+    encode gzip zstd
+    reverse_proxy cpa-manager-plus:18317
+}
+EOF
+  fi
 }
 
 write_config_file() {
+  local usage_enabled="false"
+  local usage_retention="300"
+  if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+    usage_enabled="true"
+    usage_retention="3600"
+  fi
+
   cat > config.yaml <<EOF
 # Generated by CPA Auto.
 # Edit this file and run ./cpactl restart to apply changes.
@@ -528,8 +645,8 @@ commercial-mode: false
 logging-to-file: true
 logs-max-total-size-mb: 512
 error-logs-max-files: 10
-usage-statistics-enabled: false
-redis-usage-queue-retention-seconds: 300
+usage-statistics-enabled: ${usage_enabled}
+redis-usage-queue-retention-seconds: ${usage_retention}
 
 proxy-url: ""
 force-model-prefix: false
@@ -611,8 +728,12 @@ Commands:
   restart     Restart CPA
   status      Show container status
   logs        Follow CPA logs
+  manager-logs
+              Follow CPA Manager Plus logs
   update      Pull latest image and restart
   health      Check /healthz
+  manager-health
+              Check CPA Manager Plus local HTTP response
   url         Print access URL
   password    Print saved credentials
   backup      Create a tar.gz backup in the current directory
@@ -636,6 +757,9 @@ case "${1:-help}" in
   logs)
     compose logs -f "${2:-cli-proxy-api}"
     ;;
+  manager-logs)
+    compose logs -f cpa-manager-plus
+    ;;
   update)
     compose pull
     compose up -d
@@ -644,6 +768,12 @@ case "${1:-help}" in
     port="$(get_env_value SERVER_PORT)"
     [ -n "$port" ] || port="8317"
     curl -fsS "http://127.0.0.1:${port}/healthz"
+    printf '\n'
+    ;;
+  manager-health)
+    port="$(get_env_value MANAGER_PLUS_PORT)"
+    [ -n "$port" ] || port="18317"
+    curl -fsS "http://127.0.0.1:${port}/health"
     printf '\n'
     ;;
   url)
@@ -670,7 +800,7 @@ case "${1:-help}" in
   backup)
     backup_file="cpa-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
     paths=""
-    for path in .env .credentials config.yaml docker-compose.yml docker-compose.caddy.yml Caddyfile auths logs caddy_data caddy_config; do
+    for path in .env .credentials config.yaml docker-compose.yml docker-compose.caddy.yml Caddyfile auths logs manager-plus-data caddy_data caddy_config; do
       if [ -e "$path" ]; then
         paths="${paths} ${path}"
       fi
@@ -698,6 +828,16 @@ EOF
 
 write_credentials() {
   local url="$1"
+  local manager_url=""
+  if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+    if [ -n "$MANAGER_PLUS_DOMAIN" ]; then
+      manager_url="https://${MANAGER_PLUS_DOMAIN}"
+    elif [ "$MODE" = "local" ]; then
+      manager_url="http://localhost:${MANAGER_PLUS_PORT}"
+    else
+      manager_url="http://SERVER_IP:${MANAGER_PLUS_PORT}"
+    fi
+  fi
   cat > .credentials <<EOF
 CPA_URL=${url}
 MANAGEMENT_URL=${url}/management.html
@@ -705,6 +845,12 @@ API_KEY=${API_KEY}
 MANAGEMENT_PASSWORD=${MANAGEMENT_PASSWORD}
 INSTALL_DIR=${APP_DIR}
 EOF
+  if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+    cat >> .credentials <<EOF
+MANAGER_PLUS_URL=${manager_url}
+MANAGER_PLUS_ADMIN_KEY=${MANAGER_PLUS_ADMIN_KEY}
+EOF
+  fi
   chmod 600 .credentials 2>/dev/null || true
 }
 
@@ -734,6 +880,9 @@ mkdir -p auths logs
 if [ "$USE_CADDY" = "1" ]; then
   mkdir -p caddy_data caddy_config
 fi
+if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+  mkdir -p manager-plus-data
+fi
 
 if [ -f .env ]; then
   backup_name=".env.backup.$(date +%Y%m%d%H%M%S)"
@@ -762,6 +911,9 @@ fi
 [ -n "$API_KEY" ] || API_KEY="cpa-$(random_hex 24)"
 [ -n "$MANAGEMENT_PASSWORD" ] || MANAGEMENT_PASSWORD="$EXISTING_MANAGEMENT_PASSWORD"
 [ -n "$MANAGEMENT_PASSWORD" ] || MANAGEMENT_PASSWORD="cpa-mgmt-$(random_hex 18)"
+if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+  [ -n "$MANAGER_PLUS_ADMIN_KEY" ] || MANAGER_PLUS_ADMIN_KEY="cmp_admin_$(random_hex 24)"
+fi
 
 if [ "$ENABLE_OAUTH_PORTS" = "1" ]; then
   OAUTH_BIND_HOST="0.0.0.0"
@@ -778,6 +930,13 @@ set_env_value DOMAIN "$DOMAIN"
 set_env_value TZ "$TIMEZONE"
 set_env_value API_KEY "$API_KEY"
 set_env_value MANAGEMENT_PASSWORD "$MANAGEMENT_PASSWORD"
+set_env_value WITH_MANAGER_PLUS "$WITH_MANAGER_PLUS"
+set_env_value MANAGER_PLUS_IMAGE "$MANAGER_PLUS_IMAGE"
+set_env_value MANAGER_PLUS_BIND_HOST "$MANAGER_PLUS_BIND_HOST"
+set_env_value MANAGER_PLUS_PORT "$MANAGER_PLUS_PORT"
+set_env_value MANAGER_PLUS_DOMAIN "$MANAGER_PLUS_DOMAIN"
+set_env_value MANAGER_PLUS_ADMIN_KEY "$MANAGER_PLUS_ADMIN_KEY"
+set_env_value MANAGER_PLUS_COLLECTOR_MODE "$MANAGER_PLUS_COLLECTOR_MODE"
 set_env_value HTTP_PORT "$HTTP_PORT"
 set_env_value HTTPS_PORT "$HTTPS_PORT"
 
@@ -822,7 +981,23 @@ Management panel:    ${ACCESS_URL}/management.html
 Management password: ${MANAGEMENT_PASSWORD}
 API key:             ${API_KEY}
 Install dir:         ${APP_DIR}
+EOF
 
+if [ "$WITH_MANAGER_PLUS" = "1" ]; then
+  if [ -n "$MANAGER_PLUS_DOMAIN" ]; then
+    MANAGER_PLUS_URL="https://${MANAGER_PLUS_DOMAIN}"
+  elif [ "$MODE" = "local" ]; then
+    MANAGER_PLUS_URL="http://localhost:${MANAGER_PLUS_PORT}"
+  else
+    MANAGER_PLUS_URL="http://SERVER_IP:${MANAGER_PLUS_PORT}"
+  fi
+  cat <<EOF
+Manager Plus:        ${MANAGER_PLUS_URL}/management.html
+Manager admin key:   ${MANAGER_PLUS_ADMIN_KEY}
+EOF
+fi
+
+cat <<EOF
 Useful commands:
   cd ${APP_DIR}
   ./cpactl status

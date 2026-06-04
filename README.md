@@ -34,6 +34,12 @@ curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh |
 curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --ask-secrets --install-docker
 ```
 
+如果想同时安装 CPA Manager Plus 增强后台：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --with-manager-plus --manager-plus-domain manager.cpa.boji1334.com --install-docker
+```
+
 #### Ubuntu 服务器 + Cloudflare DNS
 
 脚本会在启动 Caddy 前创建或更新 Cloudflare A 记录。默认使用 DNS-only，这样 Caddy 可以直接签发 Let's Encrypt HTTPS 证书：
@@ -96,6 +102,7 @@ powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.gi
 - 持久化 `auths/` 和 `logs/` 目录。
 - 辅助命令 `cpactl`。
 - 保存到 `.credentials` 的访问地址、管理密码和 API Key。
+- 可选 CPA Manager Plus 增强后台，包含请求监控、SQLite 用量统计、模型价格、API Key 别名等功能。
 
 示例输出：
 
@@ -114,6 +121,7 @@ Linux / macOS：
 cd /opt/cpa
 ./cpactl status
 ./cpactl logs
+./cpactl manager-logs
 ./cpactl update
 ./cpactl password
 ./cpactl backup
@@ -149,6 +157,18 @@ bash install.sh --local --api-key "my-api-key" --management-password "my-managem
 bash install.sh --local --ask-secrets
 ```
 
+安装 CPA Manager Plus：
+
+```bash
+sudo bash install.sh --server --domain cpa.example.com --with-manager-plus --manager-plus-domain manager.cpa.example.com --install-docker
+```
+
+自定义 Manager Plus 登录 admin key：
+
+```bash
+sudo bash install.sh --server --domain cpa.example.com --with-manager-plus --manager-plus-admin-key "my-manager-admin-key" --install-docker
+```
+
 自定义服务器安装目录：
 
 ```bash
@@ -182,6 +202,7 @@ config.yaml          CLIProxyAPI 配置
 docker-compose.yml   Docker Compose 配置
 auths/               OAuth/auth 记录
 logs/                CLIProxyAPI 日志
+manager-plus-data/   CPA Manager Plus SQLite 数据和 data.key，启用 --with-manager-plus 时存在
 caddy_data/          Caddy 证书数据，使用域名且未启用 --no-caddy 时存在
 caddy_config/        Caddy 配置缓存，使用域名且未启用 --no-caddy 时存在
 ```
@@ -216,7 +237,7 @@ https://cat.cpa.boji1334.com/management.html
 - CPA Manager / CPA Manager Plus 是额外的管理面板和 Manager Server，侧重更完整的配置、运行状态、用量持久化、请求监控、价格和配额视图。
 - CPA Usage Keeper 是独立的用量持久化和 Dashboard 服务，通常把 CPA 的 usage queue 数据写入 SQLite。
 
-本脚本默认只安装 CPA 主服务。如需这些扩展组件，可以在 CPA 部署完成后单独接入。
+本脚本默认只安装 CPA 主服务。加上 `--with-manager-plus` 后会安装 CPA Manager Plus，并自动开启 CPA usage queue。Manager Plus 是增强后台和监控组件，不会自动迁移 sub2api 账号；迁移账号前仍建议先备份并检查 auth/config 格式。
 
 ### 故障排查
 
@@ -270,6 +291,12 @@ If you want to enter the management key and API key yourself instead of using ge
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --ask-secrets --install-docker
+```
+
+If you also want CPA Manager Plus:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --with-manager-plus --manager-plus-domain manager.cpa.boji1334.com --install-docker
 ```
 
 #### Ubuntu Server With Cloudflare DNS
@@ -334,6 +361,7 @@ powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.gi
 - Persistent `auths/` and `logs/` folders.
 - Helper command `cpactl`.
 - URL, management password, and API key saved to `.credentials`.
+- Optional CPA Manager Plus companion backend with request monitoring, SQLite usage analytics, model pricing, API key aliases, and related dashboard features.
 
 Example output:
 
@@ -352,6 +380,7 @@ Linux / macOS:
 cd /opt/cpa
 ./cpactl status
 ./cpactl logs
+./cpactl manager-logs
 ./cpactl update
 ./cpactl password
 ./cpactl backup
@@ -387,6 +416,18 @@ Interactively enter the API key and management key:
 bash install.sh --local --ask-secrets
 ```
 
+Install CPA Manager Plus:
+
+```bash
+sudo bash install.sh --server --domain cpa.example.com --with-manager-plus --manager-plus-domain manager.cpa.example.com --install-docker
+```
+
+Custom Manager Plus login admin key:
+
+```bash
+sudo bash install.sh --server --domain cpa.example.com --with-manager-plus --manager-plus-admin-key "my-manager-admin-key" --install-docker
+```
+
 Custom server directory:
 
 ```bash
@@ -420,6 +461,7 @@ config.yaml          CLIProxyAPI configuration
 docker-compose.yml   Docker Compose configuration
 auths/               OAuth/auth records
 logs/                CLIProxyAPI logs
+manager-plus-data/   CPA Manager Plus SQLite data and data.key, when using --with-manager-plus
 caddy_data/          Caddy certificates, when using a domain without --no-caddy
 caddy_config/        Caddy config cache, when using a domain without --no-caddy
 ```
@@ -454,7 +496,7 @@ https://cat.cpa.boji1334.com/management.html
 - CPA Manager / CPA Manager Plus are companion management panels and manager servers focused on richer configuration, runtime status, persistent usage analytics, request monitoring, pricing, and quota views.
 - CPA Usage Keeper is a standalone usage persistence and dashboard service that usually consumes CPA usage queue events into SQLite.
 
-This script installs only the CPA core service by default. These companion components can be added separately after CPA is running.
+This script installs only the CPA core service by default. With `--with-manager-plus`, it also installs CPA Manager Plus and enables the CPA usage queue. Manager Plus is a companion dashboard and monitoring service; it does not automatically migrate sub2api accounts. Back up and inspect auth/config data before migrating accounts.
 
 ### Troubleshooting
 
