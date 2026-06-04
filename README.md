@@ -12,6 +12,8 @@
 
 > 本仓库部署的是 CPA 主服务和 CLIProxyAPI 内置的 `/management.html` 管理面板，不默认部署 CPA Manager Plus、CPA Usage Keeper 等独立扩展组件。
 
+如果你已经在使用 sub2api，想了解 CPA 应该怎么部署、怎么给用户分配 key、怎么导入账号和本地接入，请看：[从 sub2api 切到 CPA 的部署和使用指南](docs/sub2api-to-cpa-guide.zh-CN.md)。
+
 ### 快速开始
 
 #### Ubuntu 服务器
@@ -270,6 +272,8 @@ One-command deployment helper for [CLIProxyAPI](https://github.com/router-for-me
 It generates `config.yaml`, Docker Compose files, a client API key, a management password, persistent `auths/` / `logs/` folders, and an optional Caddy HTTPS reverse proxy.
 
 > This repository deploys the CPA core service and CLIProxyAPI's built-in `/management.html` management panel. It does not install standalone companion components such as CPA Manager Plus or CPA Usage Keeper by default.
+
+If you are migrating from sub2api, see the Chinese guide: [sub2api to CPA deployment and usage guide](docs/sub2api-to-cpa-guide.zh-CN.md).
 
 ### Quick Start
 
