@@ -1,0 +1,13 @@
+.env
+.env.backup.*
+.credentials
+auths/
+logs/
+caddy_data/
+caddy_config/
+config.yaml
+docker-compose.yml
+docker-compose.caddy.yml
+Caddyfile
+*.tar.gz
+*.zip
