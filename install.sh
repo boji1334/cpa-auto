@@ -10,6 +10,7 @@ CPA_IMAGE="${CPA_IMAGE:-eceasy/cli-proxy-api:latest}"
 TIMEZONE="${TZ:-Asia/Shanghai}"
 API_KEY="${API_KEY:-}"
 MANAGEMENT_PASSWORD="${MANAGEMENT_PASSWORD:-}"
+ASK_SECRETS="0"
 INSTALL_DOCKER="0"
 START_SERVICES="1"
 ENABLE_OAUTH_PORTS="0"
@@ -40,6 +41,7 @@ Options:
   --domain DOMAIN         Enable Caddy HTTPS reverse proxy for this domain.
   --api-key KEY           Client API key. Default: auto-generated.
   --management-password P Management key for /management.html and /v0/management. Default: auto-generated.
+  --ask-secrets           Prompt for API key and management key interactively.
   --image IMAGE           Docker image. Default: eceasy/cli-proxy-api:latest.
   --timezone TZ           Timezone. Default: Asia/Shanghai.
   --oauth-ports           Expose OAuth helper callback ports 8085, 1455, 54545, 51121, 11451.
@@ -54,8 +56,10 @@ Options:
 
 Examples:
   curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | bash -s -- --local
+  curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --ask-secrets --install-docker
   curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --install-docker
-  CF_API_TOKEN=cf_xxx curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo -E bash -s -- --server --domain cat.cpa.boji1334.com --cloudflare-dns --install-docker
+  export CF_API_TOKEN=cf_xxx
+  curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo -E bash -s -- --server --domain cat.cpa.boji1334.com --cloudflare-dns --install-docker
 EOF
 }
 
@@ -106,6 +110,10 @@ while [ "$#" -gt 0 ]; do
     --management-password)
       MANAGEMENT_PASSWORD="${2:-}"
       shift 2
+      ;;
+    --ask-secrets)
+      ASK_SECRETS="1"
+      shift
       ;;
     --image)
       CPA_IMAGE="${2:-}"
@@ -293,6 +301,23 @@ random_hex() {
     od -An -N "$bytes" -tx1 /dev/urandom | tr -d ' \n'
     printf '\n'
   fi
+}
+
+prompt_secret() {
+  local prompt="$1"
+  local value=""
+
+  [ -r /dev/tty ] || die "--ask-secrets requires an interactive terminal. Use --api-key and --management-password for non-interactive installs."
+  printf '%s' "$prompt" > /dev/tty
+  if command -v stty >/dev/null 2>&1; then
+    stty -echo < /dev/tty 2>/dev/null || true
+  fi
+  IFS= read -r value < /dev/tty || value=""
+  if command -v stty >/dev/null 2>&1; then
+    stty echo < /dev/tty 2>/dev/null || true
+  fi
+  printf '\n' > /dev/tty
+  printf '%s' "$value"
 }
 
 get_env_value() {
@@ -723,6 +748,15 @@ fi
 
 EXISTING_API_KEY="$(get_env_value API_KEY || true)"
 EXISTING_MANAGEMENT_PASSWORD="$(get_env_value MANAGEMENT_PASSWORD || true)"
+
+if [ "$ASK_SECRETS" = "1" ]; then
+  if [ -z "$MANAGEMENT_PASSWORD" ]; then
+    MANAGEMENT_PASSWORD="$(prompt_secret "Management key for /management.html (empty: keep existing or auto-generate): ")"
+  fi
+  if [ -z "$API_KEY" ]; then
+    API_KEY="$(prompt_secret "Client API key for API requests (empty: keep existing or auto-generate): ")"
+  fi
+fi
 
 [ -n "$API_KEY" ] || API_KEY="$EXISTING_API_KEY"
 [ -n "$API_KEY" ] || API_KEY="cpa-$(random_hex 24)"

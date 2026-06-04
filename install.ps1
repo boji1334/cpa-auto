@@ -12,6 +12,7 @@ param(
     [string]$Timezone = "Asia/Shanghai",
     [switch]$OAuthPorts,
     [switch]$NoCaddy,
+    [switch]$AskSecrets,
     [switch]$NoStart,
     [switch]$Help
 )
@@ -34,6 +35,7 @@ Options:
   -Domain DOMAIN           Enable Caddy HTTPS reverse proxy for this domain.
   -ApiKey KEY              Client API key. Default: auto-generated.
   -ManagementPassword P    Management key for /management.html. Default: auto-generated.
+  -AskSecrets              Prompt for API key and management key interactively.
   -Image IMAGE             Docker image. Default: eceasy/cli-proxy-api:latest.
   -Timezone TZ             Timezone. Default: Asia/Shanghai.
   -OAuthPorts              Expose OAuth helper callback ports on 0.0.0.0.
@@ -92,6 +94,17 @@ function New-HexSecret([int]$Bytes) {
         $rng.Dispose()
     }
     return (($buffer | ForEach-Object { $_.ToString("x2") }) -join "")
+}
+
+function Read-PlainSecret([string]$Prompt) {
+    $secure = Read-Host -Prompt $Prompt -AsSecureString
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    }
+    finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
 }
 
 function Get-DotEnvValue([string]$Path, [string]$Key) {
@@ -452,6 +465,15 @@ else {
 
 $ExistingApiKey = Get-DotEnvValue ".env" "API_KEY"
 $ExistingManagementPassword = Get-DotEnvValue ".env" "MANAGEMENT_PASSWORD"
+
+if ($AskSecrets) {
+    if ([string]::IsNullOrWhiteSpace($ManagementPassword)) {
+        $ManagementPassword = Read-PlainSecret "Management key for /management.html (empty: keep existing or auto-generate)"
+    }
+    if ([string]::IsNullOrWhiteSpace($ApiKey)) {
+        $ApiKey = Read-PlainSecret "Client API key for API requests (empty: keep existing or auto-generate)"
+    }
+}
 
 if ([string]::IsNullOrWhiteSpace($ApiKey)) { $ApiKey = $ExistingApiKey }
 if ([string]::IsNullOrWhiteSpace($ApiKey)) { $ApiKey = "cpa-$(New-HexSecret 24)" }

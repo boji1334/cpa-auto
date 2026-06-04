@@ -28,6 +28,12 @@ curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh |
 curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --install-docker
 ```
 
+如果想自己输入管理密钥和 API Key，而不是让脚本自动生成：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --ask-secrets --install-docker
+```
+
 #### Ubuntu 服务器 + Cloudflare DNS
 
 脚本会在启动 Caddy 前创建或更新 Cloudflare A 记录。默认使用 DNS-only，这样 Caddy 可以直接签发 Let's Encrypt HTTPS 证书：
@@ -73,6 +79,12 @@ curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh |
 
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.ps1 -OutFile install.ps1; .\install.ps1"
+```
+
+如果想自己输入管理密钥和 API Key：
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.ps1 -OutFile install.ps1; .\install.ps1 -AskSecrets"
 ```
 
 ### 部署后你会得到
@@ -129,6 +141,12 @@ bash install.sh --local --port 9000
 
 ```bash
 bash install.sh --local --api-key "my-api-key" --management-password "my-management-password"
+```
+
+交互式输入 API Key 和管理密码：
+
+```bash
+bash install.sh --local --ask-secrets
 ```
 
 自定义服务器安装目录：
@@ -248,6 +266,12 @@ Replace the domain with your real domain:
 curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --install-docker
 ```
 
+If you want to enter the management key and API key yourself instead of using generated values:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --ask-secrets --install-docker
+```
+
 #### Ubuntu Server With Cloudflare DNS
 
 This creates or updates the Cloudflare A record for the domain before starting Caddy. The script defaults the record to DNS-only, which lets Caddy issue the HTTPS certificate directly:
@@ -293,6 +317,12 @@ Then run PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.ps1 -OutFile install.ps1; .\install.ps1"
+```
+
+If you want to enter the management key and API key yourself:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.ps1 -OutFile install.ps1; .\install.ps1 -AskSecrets"
 ```
 
 ### What You Get
@@ -349,6 +379,12 @@ Custom API key and management password:
 
 ```bash
 bash install.sh --local --api-key "my-api-key" --management-password "my-management-password"
+```
+
+Interactively enter the API key and management key:
+
+```bash
+bash install.sh --local --ask-secrets
 ```
 
 Custom server directory:
