@@ -427,7 +427,9 @@ function Wait-ForHealth {
     Write-Host "CPA did not answer http://127.0.0.1:$Port/healthz yet. Check .\cpactl.ps1 logs." -ForegroundColor Yellow
 }
 
-Test-DockerReady
+if (-not $NoStart) {
+    Test-DockerReady
+}
 
 Write-Step "Preparing CPA Auto in $Dir"
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null

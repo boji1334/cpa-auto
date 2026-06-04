@@ -688,7 +688,9 @@ wait_for_health() {
 }
 
 ensure_basic_tools
-check_docker
+if [ "$START_SERVICES" = "1" ]; then
+  check_docker
+fi
 setup_cloudflare_dns
 
 log "Preparing ${APP_NAME} in ${APP_DIR}"
