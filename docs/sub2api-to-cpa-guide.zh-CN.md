@@ -126,7 +126,7 @@ CPA 的核心配置里是 `api-keys` 列表，不是完整的用户注册、邮�
 
 | 凭据 | 给谁 | 用途 | 泄露风险 |
 | --- | --- | --- | --- |
-| 客户端 API Key | 终端用户或客户端 | 调用 `/v1`、`/backend-api/codex` 等 API | 会消耗额度，可被刷请求 |
+| 客户端 API Key | 终端用户或客户端 | 调用 `/v1` OpenAI 兼容 API | 会消耗额度，可被刷请求 |
 | 管理密钥 | 管理员 | 访问 `/management.html` 和管理 API | 可改配置、上传下载 auth 文件 |
 | Manager Plus admin key | 管理员 | 登录 Manager Plus | 可看统计、请求和部分增强管理能力 |
 
@@ -225,18 +225,28 @@ api-keys:
 
 ## 4. 给用户怎么接入
 
-你给普通用户的信息通常只有两项：
+生成 key 之后，普通用户不需要打开 `https://cat.cpa.boji1334.com/management.html`，也不需要打开 `https://manager.cpa.boji1334.com/management.html`。
+
+他们只需要把下面两项填到自己的客户端里：
 
 ```text
 Base URL: https://cat.cpa.boji1334.com/v1
 API Key: 用户自己的 key
 ```
 
-如果是 Codex 类客户端，再给：
+也就是说，你要发给用户的是这种模板：
 
 ```text
-Codex endpoint: https://cat.cpa.boji1334.com/backend-api/codex
-API Key: 用户自己的 key
+你使用 OpenAI 兼容 API。
+
+Base URL:
+https://cat.cpa.boji1334.com/v1
+
+API Key:
+这里换成分配给你的 CPA API Key
+
+客户端里请选择 OpenAI-compatible / Custom OpenAI / OpenAI API。
+不要打开管理员后台，不要去 AI 提供商页面填写这个 key。
 ```
 
 不同客户端叫法不一样，常见字段是：
@@ -244,11 +254,25 @@ API Key: 用户自己的 key
 | 客户端字段 | 应填内容 |
 | --- | --- |
 | Base URL / API Base / OpenAI Base URL | `https://cat.cpa.boji1334.com/v1` |
+| API Host / Server / Endpoint root | `https://cat.cpa.boji1334.com`，只在客户端说明会自动拼 `/v1` 时这样填 |
+| Models URL / Model list URL | `https://cat.cpa.boji1334.com/v1/models`，只有客户端单独要求模型列表地址时才填 |
 | API Key / Token | 用户自己的 CPA API Key |
 | Model | 选择 CPA 后端支持的模型名 |
 | Provider | 通常选 OpenAI-compatible / Custom OpenAI / OpenAI API |
 
-### 4.1 curl 测试
+判断方法很简单：如果输入框名字里有 `Base URL` 或 `OpenAI Base URL`，通常填 `https://cat.cpa.boji1334.com/v1`。如果输入框明确说“不要包含 `/v1`”或“系统会自动拼接 `/v1`”，才填 `https://cat.cpa.boji1334.com`。
+
+不要把这些地址填错：
+
+| 地址 | 能不能给用户当 Base URL | 原因 |
+| --- | --- | --- |
+| `https://cat.cpa.boji1334.com/v1` | 可以 | OpenAI 兼容 API 入口 |
+| `https://cat.cpa.boji1334.com/v1/models` | 不可以 | 这是测试模型列表的具体接口，不是 Base URL |
+| `https://cat.cpa.boji1334.com/management.html` | 不可以 | 管理员后台 |
+| `https://manager.cpa.boji1334.com/management.html` | 不可以 | Manager Plus 后台 |
+| `https://cat.cpa.boji1334.com/backend-api/codex` | 不建议作为通用用户入口 | 不是 OpenAI 兼容 Base URL，很多客户端会再拼 `/v1/models` 导致 404 |
+
+### 4.1 管理员用 curl 测试这个 key
 
 ```bash
 curl https://cat.cpa.boji1334.com/v1/models \
@@ -262,16 +286,17 @@ curl https://cat.cpa.boji1334.com/v1/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4o-mini",
+    "model": "gpt-5.4-mini",
     "messages": [
-      {"role": "user", "content": "hello"}
-    ]
+      {"role": "user", "content": "Reply with exactly: CPA_OK"}
+    ],
+    "max_tokens": 16
   }'
 ```
 
-模型名要以你 CPA 里实际可用的模型为准。先用 `/v1/models` 看列表。
+模型名要以你 CPA 里实际可用的模型为准。先用 `/v1/models` 看列表，再发一条小请求确认能真正生成。只看到模型列表不等于后端账号一定可用。
 
-### 4.2 OpenAI SDK
+### 4.2 用户用 OpenAI SDK
 
 JavaScript：
 
@@ -284,7 +309,7 @@ const client = new OpenAI({
 });
 
 const response = await client.chat.completions.create({
-  model: "gpt-4o-mini",
+  model: "gpt-5.4-mini",
   messages: [{ role: "user", content: "hello" }],
 });
 
@@ -302,14 +327,14 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="gpt-4o-mini",
+    model="gpt-5.4-mini",
     messages=[{"role": "user", "content": "hello"}],
 )
 
 print(response.choices[0].message.content)
 ```
 
-### 4.3 本地工具怎么配置
+### 4.3 用户本地工具怎么配置
 
 凡是支持 OpenAI 兼容接口的工具，一般都这样填：
 
@@ -327,15 +352,63 @@ api_key: YOUR_API_KEY
 model: 你要用的模型
 ```
 
-如果工具专门支持 Codex 后端，优先看它是否允许配置 Codex API base。CPA 提供的 Codex 兼容路径通常是：
+### 4.4 Codex CLI 怎么配置
 
-```text
-https://cat.cpa.boji1334.com/backend-api/codex
+如果用户用的是 Codex CLI，按 CLIProxyAPI 官方文档，仍然把 API 入口配置成 `/v1`。不要在 Codex CLI 里填 `backend-api/codex/v1/models`。
+
+Linux / macOS 通常编辑：
+
+```bash
+mkdir -p ~/.codex
+nano ~/.codex/config.toml
 ```
 
-如果工具只支持 OpenAI 兼容入口，就先用 `/v1`，不要强行填 `/backend-api/codex`。
+Windows 通常编辑：
 
-### 4.4 要不要用 CCS
+```powershell
+notepad "$env:USERPROFILE\.codex\config.toml"
+```
+
+写入示例：
+
+```toml
+model = "gpt-5.4-mini"
+model_provider = "cpa"
+
+[model_providers.cpa]
+name = "CPA"
+base_url = "https://cat.cpa.boji1334.com/v1"
+wire_api = "responses"
+requires_openai_auth = true
+experimental_provider = true
+experimental_streamable = true
+experimental_bearer_token = "用户自己的 CPA API Key"
+```
+
+模型名以你的 CPA `/v1/models` 返回结果为准。当前部署已经用 `gpt-5.4-mini` 做过一次聊天补全测试。如果用户的 Codex CLI 版本不认这些字段，就先让他用普通 OpenAI 兼容客户端测试 `/v1`，再处理 Codex CLI 版本问题。
+
+### 4.5 不要在 `AI 提供商` 页面测试用户 key
+
+你截图里的 `AI 提供商` -> `从 /v1/models 获取` 是用来配置“上游 provider”的。
+
+它的逻辑是：
+
+```text
+你填一个上游 Base URL
+页面自动请求：上游 Base URL + /v1/models
+请求头使用：这个上游 provider 的 API 密钥
+```
+
+所以：
+
+- 这里的 `API 密钥` 不是 CPA 用户 key。
+- 这里的 `Base URL` 不是给普通用户填的地址。
+- 不要把 `https://cat.cpa.boji1334.com/v1` 和 CPA 用户 key 填到这里测试。
+- 更不要填 `https://cat.cpa.boji1334.com/backend-api/codex`，因为页面会拼成 `.../backend-api/codex/v1/models`，通常会 404。
+
+要测试 CPA 用户 key，请用 `curl https://cat.cpa.boji1334.com/v1/models -H "Authorization: Bearer ..."`，或者在真正的用户客户端里测试。
+
+### 4.6 要不要用 CCS
 
 如果你说的 CCS 是 Claude Code Switch 这一类本地切换工具，它不是 CPA 必需组件。
 
@@ -720,14 +793,20 @@ curl https://cat.cpa.boji1334.com/v1/models \
 模型名以 /v1/models 返回为准。
 ```
 
-如果是 Codex 类客户端：
+如果是 Codex CLI，可以补发这个配置模板：
 
-```text
-如果客户端支持 Codex API base，请使用:
-https://cat.cpa.boji1334.com/backend-api/codex
+```toml
+model = "gpt-5.4-mini"
+model_provider = "cpa"
 
-如果不支持 Codex 专用入口，就使用 OpenAI 兼容入口:
-https://cat.cpa.boji1334.com/v1
+[model_providers.cpa]
+name = "CPA"
+base_url = "https://cat.cpa.boji1334.com/v1"
+wire_api = "responses"
+requires_openai_auth = true
+experimental_provider = true
+experimental_streamable = true
+experimental_bearer_token = "YOUR_USER_API_KEY"
 ```
 
 ## 10. 和 sub2api 共存时的注意事项
