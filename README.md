@@ -1,18 +1,246 @@
 # CPA Auto Deployer
 
-One-command deployment helper for [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI).
+<p align="center">
+  <a href="#中文">中文</a> | <a href="#english">English</a>
+</p>
 
-It generates `config.yaml`, Docker Compose files, a client API key, a management password, persistent auth/log folders, and optional Caddy HTTPS reverse proxy.
+## 中文
 
-## Quick Start
+用于 [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) 的一键部署脚本。
 
-### Ubuntu Server
+它会自动生成 `config.yaml`、Docker Compose 文件、客户端 API Key、管理密码、持久化 `auths/` / `logs/` 目录，并可选安装 Caddy HTTPS 反向代理。
+
+> 本仓库部署的是 CPA 主服务和 CLIProxyAPI 内置的 `/management.html` 管理面板，不默认部署 CPA Manager Plus、CPA Usage Keeper 等独立扩展组件。
+
+### 快速开始
+
+#### Ubuntu 服务器
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --install-docker
 ```
 
-### Ubuntu Server With Domain And HTTPS
+#### Ubuntu 服务器 + 域名 HTTPS
+
+把示例域名替换成你自己的域名：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --install-docker
+```
+
+#### Ubuntu 服务器 + Cloudflare DNS
+
+脚本会在启动 Caddy 前创建或更新 Cloudflare A 记录。默认使用 DNS-only，这样 Caddy 可以直接签发 Let's Encrypt HTTPS 证书：
+
+```bash
+export CF_API_TOKEN=cf_xxx
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo -E bash -s -- --server --domain cat.cpa.boji1334.com --cloudflare-dns --install-docker
+```
+
+Cloudflare token 只从命令环境变量读取，不会写入 `.env`、`.credentials` 或 `config.yaml`。
+
+如果想使用 Cloudflare 橙云代理，请加上 `--cf-proxied true`，并把 Cloudflare SSL/TLS 模式设为 Full 或 Full (strict)。
+
+#### 服务器已有 nginx / Caddy / Cloudflare Tunnel
+
+如果服务器上已经有反向代理占用了 `80` / `443`，可以跳过本脚本自带的 Caddy：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cpa.example.com --no-caddy --install-docker
+```
+
+然后把你现有的 nginx、Caddy 或 Cloudflare Tunnel 指向：
+
+```text
+http://127.0.0.1:8317
+```
+
+#### 本地 Linux / macOS
+
+先安装并启动 Docker，然后运行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | bash -s -- --local
+```
+
+#### Windows 本地
+
+先安装并启动 Docker Desktop：
+
+[Download Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+然后运行 PowerShell：
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.ps1 -OutFile install.ps1; .\install.ps1"
+```
+
+### 部署后你会得到
+
+- 监听 `8317` 端口的 CLIProxyAPI 容器。
+- 可选的 Caddy HTTPS 域名反向代理。
+- `/management.html` 和 `/v0/management` 使用的管理密码。
+- `/v1`、`/v1beta`、`/backend-api/codex` 和 provider routes 使用的客户端 API Key。
+- 持久化 `auths/` 和 `logs/` 目录。
+- 辅助命令 `cpactl`。
+- 保存到 `.credentials` 的访问地址、管理密码和 API Key。
+
+示例输出：
+
+```text
+URL:                 https://cat.cpa.boji1334.com
+Management panel:    https://cat.cpa.boji1334.com/management.html
+Management password: cpa-mgmt-generated
+API key:             cpa-generated
+```
+
+### 常用命令
+
+Linux / macOS：
+
+```bash
+cd /opt/cpa
+./cpactl status
+./cpactl logs
+./cpactl update
+./cpactl password
+./cpactl backup
+```
+
+Windows：
+
+```powershell
+cd "$env:USERPROFILE\cpa-local"
+powershell -ExecutionPolicy Bypass -File .\cpactl.ps1 status
+powershell -ExecutionPolicy Bypass -File .\cpactl.ps1 logs
+powershell -ExecutionPolicy Bypass -File .\cpactl.ps1 update
+powershell -ExecutionPolicy Bypass -File .\cpactl.ps1 password
+```
+
+### 自定义选项
+
+自定义端口：
+
+```bash
+bash install.sh --local --port 9000
+```
+
+自定义 API Key 和管理密码：
+
+```bash
+bash install.sh --local --api-key "my-api-key" --management-password "my-management-password"
+```
+
+自定义服务器安装目录：
+
+```bash
+sudo bash install.sh --server --dir /opt/my-cpa --install-docker
+```
+
+暴露 OAuth 辅助回调端口：
+
+```bash
+sudo bash install.sh --server --domain cpa.example.com --oauth-ports --install-docker
+```
+
+默认情况下，OAuth 辅助回调端口 `8085`、`1455`、`54545`、`51121`、`11451` 只绑定到 `127.0.0.1`。只有当 Web 管理面板需要让 provider 登录回调直接访问服务器时，才建议使用 `--oauth-ports`。
+
+使用已有反向代理而不是 Caddy：
+
+```bash
+sudo bash install.sh --server --domain cpa.example.com --no-caddy --install-docker
+```
+
+使用 `--no-caddy` 时，请把现有反向代理指向 `http://127.0.0.1:8317`。
+
+### 数据位置
+
+安装目录包含：
+
+```text
+.env                 运行变量和生成的密钥
+.credentials         访问地址、管理密码、API Key
+config.yaml          CLIProxyAPI 配置
+docker-compose.yml   Docker Compose 配置
+auths/               OAuth/auth 记录
+logs/                CLIProxyAPI 日志
+caddy_data/          Caddy 证书数据，使用域名且未启用 --no-caddy 时存在
+caddy_config/        Caddy 配置缓存，使用域名且未启用 --no-caddy 时存在
+```
+
+迁移到另一台服务器时，停止服务并复制整个安装目录即可。
+
+### API 使用
+
+使用生成的 API Key 作为 Bearer Token：
+
+```bash
+curl https://cat.cpa.boji1334.com/v1/models \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+管理 API 使用管理密码：
+
+```bash
+curl https://cat.cpa.boji1334.com/v0/management/config \
+  -H "Authorization: Bearer YOUR_MANAGEMENT_PASSWORD"
+```
+
+管理面板地址：
+
+```text
+https://cat.cpa.boji1334.com/management.html
+```
+
+### 可选 Manager / 统计组件
+
+- CLIProxyAPI 官方 Web UI 是内置管理面板，服务运行后通过 `/management.html` 访问。
+- CPA Manager / CPA Manager Plus 是额外的管理面板和 Manager Server，侧重更完整的配置、运行状态、用量持久化、请求监控、价格和配额视图。
+- CPA Usage Keeper 是独立的用量持久化和 Dashboard 服务，通常把 CPA 的 usage queue 数据写入 SQLite。
+
+本脚本默认只安装 CPA 主服务。如需这些扩展组件，可以在 CPA 部署完成后单独接入。
+
+### 故障排查
+
+页面打不开：
+
+- 确认 Docker 正在运行。
+- 检查 `./cpactl status` 和 `./cpactl logs`。
+- 如果使用域名，确认 DNS 指向你的服务器。
+- 如果使用 HTTPS，确认 TCP `80` 和 `443` 端口已开放。
+- 如果使用 Cloudflare 代理，确认 SSL/TLS 模式为 Full 或 Full (strict)。
+
+忘记凭据：
+
+```bash
+./cpactl password
+```
+
+更新 CLIProxyAPI：
+
+```bash
+./cpactl update
+```
+
+---
+
+## English
+
+One-command deployment helper for [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI).
+
+It generates `config.yaml`, Docker Compose files, a client API key, a management password, persistent `auths/` / `logs/` folders, and an optional Caddy HTTPS reverse proxy.
+
+> This repository deploys the CPA core service and CLIProxyAPI's built-in `/management.html` management panel. It does not install standalone companion components such as CPA Manager Plus or CPA Usage Keeper by default.
+
+### Quick Start
+
+#### Ubuntu Server
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --install-docker
+```
+
+#### Ubuntu Server With Domain And HTTPS
 
 Replace the domain with your real domain:
 
@@ -20,19 +248,34 @@ Replace the domain with your real domain:
 curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cat.cpa.boji1334.com --install-docker
 ```
 
-### Ubuntu Server With Cloudflare DNS
+#### Ubuntu Server With Cloudflare DNS
 
 This creates or updates the Cloudflare A record for the domain before starting Caddy. The script defaults the record to DNS-only, which lets Caddy issue the HTTPS certificate directly:
 
 ```bash
-CF_API_TOKEN=cf_xxx curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo -E bash -s -- --server --domain cat.cpa.boji1334.com --cloudflare-dns --install-docker
+export CF_API_TOKEN=cf_xxx
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo -E bash -s -- --server --domain cat.cpa.boji1334.com --cloudflare-dns --install-docker
 ```
 
 The Cloudflare token is read only from the command environment. It is not written to `.env`, `.credentials`, or `config.yaml`.
 
 If you want Cloudflare orange-cloud proxy, add `--cf-proxied true` and set Cloudflare SSL/TLS mode to Full or Full (strict).
 
-### Local Linux / macOS
+#### Server With Existing nginx / Caddy / Cloudflare Tunnel
+
+If another reverse proxy already owns ports `80` / `443`, skip the bundled Caddy proxy:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | sudo bash -s -- --server --domain cpa.example.com --no-caddy --install-docker
+```
+
+Then point your existing nginx, Caddy, or Cloudflare Tunnel to:
+
+```text
+http://127.0.0.1:8317
+```
+
+#### Local Linux / macOS
 
 Install and start Docker first, then run:
 
@@ -40,7 +283,7 @@ Install and start Docker first, then run:
 curl -fsSL https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.sh | bash -s -- --local
 ```
 
-### Windows Local
+#### Windows Local
 
 Install and start Docker Desktop first:
 
@@ -52,7 +295,7 @@ Then run PowerShell:
 powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.githubusercontent.com/boji1334/cpa-auto/main/install.ps1 -OutFile install.ps1; .\install.ps1"
 ```
 
-## What You Get
+### What You Get
 
 - CLIProxyAPI container on port `8317`.
 - Optional Caddy HTTPS for a domain.
@@ -60,7 +303,7 @@ powershell -ExecutionPolicy Bypass -Command "iwr -UseBasicParsing https://raw.gi
 - Generated client API key for `/v1`, `/v1beta`, `/backend-api/codex`, and provider routes.
 - Persistent `auths/` and `logs/` folders.
 - Helper command `cpactl`.
-- Credentials saved to `.credentials`.
+- URL, management password, and API key saved to `.credentials`.
 
 Example output:
 
@@ -71,7 +314,7 @@ Management password: cpa-mgmt-generated
 API key:             cpa-generated
 ```
 
-## Common Commands
+### Common Commands
 
 Linux / macOS:
 
@@ -94,7 +337,7 @@ powershell -ExecutionPolicy Bypass -File .\cpactl.ps1 update
 powershell -ExecutionPolicy Bypass -File .\cpactl.ps1 password
 ```
 
-## Custom Options
+### Custom Options
 
 Custom port:
 
@@ -128,9 +371,9 @@ Use an existing reverse proxy instead of Caddy:
 sudo bash install.sh --server --domain cpa.example.com --no-caddy --install-docker
 ```
 
-With `--no-caddy`, point your nginx/Caddy/Cloudflare Tunnel to `http://127.0.0.1:8317`.
+With `--no-caddy`, point your existing reverse proxy to `http://127.0.0.1:8317`.
 
-## Data Location
+### Data Location
 
 The install directory contains:
 
@@ -147,9 +390,9 @@ caddy_config/        Caddy config cache, when using a domain without --no-caddy
 
 To migrate to another server, stop the service and copy the whole install directory.
 
-## API Usage
+### API Usage
 
-Use the printed API key as a bearer token:
+Use the generated API key as a Bearer token:
 
 ```bash
 curl https://cat.cpa.boji1334.com/v1/models \
@@ -169,7 +412,15 @@ The management panel is:
 https://cat.cpa.boji1334.com/management.html
 ```
 
-## Troubleshooting
+### Optional Manager / Usage Components
+
+- CLIProxyAPI's official Web UI is the built-in management panel served at `/management.html`.
+- CPA Manager / CPA Manager Plus are companion management panels and manager servers focused on richer configuration, runtime status, persistent usage analytics, request monitoring, pricing, and quota views.
+- CPA Usage Keeper is a standalone usage persistence and dashboard service that usually consumes CPA usage queue events into SQLite.
+
+This script installs only the CPA core service by default. These companion components can be added separately after CPA is running.
+
+### Troubleshooting
 
 Page does not open:
 
